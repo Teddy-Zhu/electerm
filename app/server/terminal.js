@@ -129,8 +129,7 @@ class Terminal {
   async remoteInit (initOptions, isTest) {
     const display = await getDisplay()
     const x11Cookie = await getX11Cookie()
-    return new Promise(async (resolve, reject) => {
-
+    return new Promise((resolve, reject) => {
       if (initOptions.tunnelHost) {
         const tunnelConn = new Client()
         const conn = new Client()
@@ -177,7 +176,7 @@ class Terminal {
         const shellWindow = _.pick(initOptions, [
           'rows', 'cols', 'term'
         ])
-        let cpParam = Object.assign(
+        const cpParam = Object.assign(
           {},
           {
             readyTimeout: _.get(initOptions, 'sshReadyTimeout'),
@@ -193,7 +192,7 @@ class Terminal {
             'tunnelPassphrase'
           ])
         )
-        let localPort = await getPort()
+        const localPort = Promise.resolve(getPort)
 
         cpParam.host = cpParam['tunnelHost']
         cpParam.port = cpParam['tunnelPort']
@@ -262,11 +261,9 @@ class Terminal {
               retry()
             })
             .on('ready', () => {
-
-              let tunnelOpt = Object.assign({}, opts);
+              const tunnelOpt = Object.assign({}, opts)
               delete tunnelOpt.host
               delete tunnelOpt.port
-
 
               conn.forwardOut('127.0.0.1', localPort, opts.host, opts.port, (err, stream) => {
                 if (err) {
@@ -275,7 +272,6 @@ class Terminal {
                 }
                 tunnelOpt.sock = stream
                 tunnelConn.on('ready', () => {
-
                   if (isTest) {
                     tunnelConn.end()
                     conn.end()
@@ -293,7 +289,6 @@ class Terminal {
                       resolve(true)
                     }
                   )
-
                 }).on('error', err => {
                   reject(err)
                 }).connect(tunnelOpt)
@@ -454,7 +449,6 @@ class Terminal {
         }
         this.conn = conn
       }
-
     })
   }
 

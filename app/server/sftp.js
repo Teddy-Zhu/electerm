@@ -13,7 +13,7 @@ const getPort = require('get-port')
 class Sftp {
   constructor () {
     this.client = new Client()
-    this.tunnelClient = new Client();
+    this.tunnelClient = new Client()
   }
 
   /**
@@ -21,7 +21,7 @@ class Sftp {
    * @return {Promise} sftp inst
    */
   connect (config) {
-    const { client , tunnelClient } = this
+    const { client, tunnelClient } = this
     const confs = Object.assign(
       {
         tryKeyboard: true
@@ -40,9 +40,9 @@ class Sftp {
     if (!confs.passphrase) {
       delete confs.passphrase
     }
-    return new Promise(async(resolve, reject) => {
+    return new Promise((resolve, reject) => {
       if (config.tunnelHost) {
-        let cpParam = Object.assign(
+        const cpParam = Object.assign(
           {},
           {
             readyTimeout: _.get(config, 'sshReadyTimeout'),
@@ -70,7 +70,7 @@ class Sftp {
         delete cpParam.tunnelPassword
         delete cpParam.tunnelPrivateKey
         delete cpParam.tunnelPassphrase
-        let localPort = await getPort()
+        const localPort = Promise.resolve(getPort)
 
         const run = (info) => {
           if (info && info.socket) {
@@ -90,7 +90,7 @@ class Sftp {
               finish([confs.password])
             })
             .on('ready', () => {
-              let tunnelOpt = Object.assign({}, config);
+              const tunnelOpt = Object.assign({}, config)
               delete tunnelOpt.host
               delete tunnelOpt.port
 
@@ -102,7 +102,6 @@ class Sftp {
                 tunnelOpt.sock = stream
 
                 tunnelClient.on('ready', () => {
-
                   tunnelClient.sftp((err, sftp) => {
                     if (err) {
                       reject(err)
@@ -111,7 +110,6 @@ class Sftp {
                     resolve('')
                   })
                 }).connect(tunnelOpt)
-
               })
             })
             .on('error', (err) => {
@@ -178,7 +176,6 @@ class Sftp {
           run()
         }
       }
-
     })
   }
 

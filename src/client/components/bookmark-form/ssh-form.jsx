@@ -283,7 +283,7 @@ export class BookmarkForm extends React.PureComponent {
   }
 
   beforeTunnelUpload = (file) => {
-    let privateKey = window.getGlobal('fs')
+    const privateKey = window.getGlobal('fs')
       .readFileSync(file.path).toString()
     this.props.form.setFieldsValue({
       tunnelPrivateKey: privateKey
@@ -297,12 +297,11 @@ export class BookmarkForm extends React.PureComponent {
     return this[authType + 'Render']()
   }
 
-  renderSshTunnelAuth() {
-    let authType = this.props.form.getFieldValue('tunnelAuthType')
-      || authTypeMap.password
+  renderSshTunnelAuth () {
+    const authType = this.props.form.getFieldValue('tunnelAuthType') ||
+      authTypeMap.password
     return this['tunnel' + authType + 'Render']()
   }
-
 
   tunnelpasswordRender () {
     const { getFieldDecorator } = this.props.form
@@ -806,7 +805,7 @@ export class BookmarkForm extends React.PureComponent {
       tunnelUsername
     } = this.props.formData
     const {
-      autofocustrigger,
+      autofocustrigger
     } = this.props
 
     return (
@@ -1007,7 +1006,7 @@ export class BookmarkForm extends React.PureComponent {
         <TabPane tab={e('auth')} key='auth' forceRender>
           {this.renderCommon()}
         </TabPane>
-        <TabPane tab={e('Tunnel')} key="tunnel" forceRender>
+        <TabPane tab={e('Tunnel')} key='tunnel' forceRender>
           {this.renderSshTunnel()}
         </TabPane>
         <TabPane tab={s('settings')} key='settings' forceRender>

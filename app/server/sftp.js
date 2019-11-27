@@ -8,9 +8,12 @@ const _ = require('lodash')
 const { readRemoteFile, writeRemoteFile } = require('./sftp-file')
 const alg = require('./ssh2-alg')
 
+const getPort = require('get-port')
+
 class Sftp {
   constructor () {
     this.client = new Client()
+    this.tunnelClient = new Client();
   }
 
   /**
@@ -18,7 +21,7 @@ class Sftp {
    * @return {Promise} sftp inst
    */
   connect (config) {
-    const { client } = this
+    const { client , tunnelClient } = this
     const confs = Object.assign(
       {
         tryKeyboard: true
@@ -37,51 +40,145 @@ class Sftp {
     if (!confs.passphrase) {
       delete confs.passphrase
     }
-    return new Promise((resolve, reject) => {
-      const run = (info) => {
-        if (info && info.socket) {
-          delete confs.host
-          delete confs.port
-          delete confs.proxy
-          confs.sock = info.socket
-        }
-        client
-          .on('keyboard-interactive', (
-            name,
-            instructions,
-            instructionsLang,
-            prompts,
-            finish
-          ) => {
-            finish([confs.password])
-          })
-          .on('ready', () => {
-            client.sftp((err, sftp) => {
-              if (err) {
-                reject(err)
-              }
-              this.sftp = sftp
-              resolve('')
+    return new Promise(async(resolve, reject) => {
+      if (config.tunnelHost) {
+        let cpParam = Object.assign(
+          {},
+          {
+            readyTimeout: _.get(config, 'sshReadyTimeout'),
+            keepaliveInterval: _.get(config, 'keepaliveInterval'),
+            agent: process.env.SSH_AUTH_SOCK
+          },
+          _.pick(config, [
+            'tunnelHost',
+            'tunnelPort',
+            'tunnelUsername',
+            'tunnelPassword',
+            'tunnelPrivateKey',
+            'tunnelPassphrase'
+          ])
+        )
+        cpParam.host = cpParam['tunnelHost']
+        cpParam.port = cpParam['tunnelPort']
+        cpParam.username = cpParam['tunnelUsername']
+        cpParam.password = cpParam['tunnelPassword']
+        cpParam.privateKey = cpParam['tunnelPrivateKey']
+        cpParam.passphrase = cpParam['tunnelPassphrase']
+        delete cpParam.tunnelHost
+        delete cpParam.tunnelPort
+        delete cpParam.tunnelUsername
+        delete cpParam.tunnelPassword
+        delete cpParam.tunnelPrivateKey
+        delete cpParam.tunnelPassphrase
+        let localPort = await getPort()
+
+        const run = (info) => {
+          if (info && info.socket) {
+            delete cpParam.host
+            delete cpParam.port
+            delete cpParam.proxy
+            cpParam.sock = info.socket
+          }
+          client
+            .on('keyboard-interactive', (
+              name,
+              instructions,
+              instructionsLang,
+              prompts,
+              finish
+            ) => {
+              finish([confs.password])
             })
-          })
-          .on('error', (err) => {
-            client.end()
-            reject(err)
-          })
-          .connect(confs)
-      }
-      if (
-        config.proxy &&
-        config.proxy.proxyIp &&
-        config.proxy.proxyPort
-      ) {
-        proxySock({
-          ...config,
-          ...confs
-        }).then(run)
+            .on('ready', () => {
+              let tunnelOpt = Object.assign({}, config);
+              delete tunnelOpt.host
+              delete tunnelOpt.port
+
+              client.forwardOut('127.0.0.1', localPort, config.host, config.port, (err, stream) => {
+                if (err) {
+                  reject(err)
+                  return
+                }
+                tunnelOpt.sock = stream
+
+                tunnelClient.on('ready', () => {
+
+                  tunnelClient.sftp((err, sftp) => {
+                    if (err) {
+                      reject(err)
+                    }
+                    this.sftp = sftp
+                    resolve('')
+                  })
+                }).connect(tunnelOpt)
+
+              })
+            })
+            .on('error', (err) => {
+              client.end()
+              reject(err)
+            })
+            .connect(cpParam)
+        }
+        if (
+          config.proxy &&
+          config.proxy.proxyIp &&
+          config.proxy.proxyPort
+        ) {
+          proxySock({
+            ...config,
+            ...cpParam
+          }).then(run)
+        } else {
+          run()
+        }
       } else {
-        run()
+        const run = (info) => {
+          if (info && info.socket) {
+            delete confs.host
+            delete confs.port
+            delete confs.proxy
+            confs.sock = info.socket
+          }
+          client
+            .on('keyboard-interactive', (
+              name,
+              instructions,
+              instructionsLang,
+              prompts,
+              finish
+            ) => {
+              finish([confs.password])
+            })
+            .on('ready', () => {
+              client.sftp((err, sftp) => {
+                if (err) {
+                  reject(err)
+                }
+                this.sftp = sftp
+                resolve('')
+              })
+            })
+            .on('error', (err) => {
+              client.end()
+              reject(err)
+            })
+            .connect(confs)
+        }
+        if (
+          config.proxy &&
+          config.proxy.proxyIp &&
+          config.proxy.proxyPort
+        ) {
+          proxySock({
+            ...config,
+            ...confs
+          }).then(run)
+        } else {
+          run()
+        }
       }
+
     })
   }
 

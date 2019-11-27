@@ -105,6 +105,7 @@
     "xterm": "3.14.5"
   },
   "dependencies": {
+    "get-port": "5.0.0",
     "@electerm/electerm-locales": "0.5.19",
     "@electerm/ssh2": "0.8.9",
     "bluebird": "3.5.5",

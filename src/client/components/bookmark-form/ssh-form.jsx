@@ -282,10 +282,110 @@ export class BookmarkForm extends React.PureComponent {
     return false
   }
 
+  beforeTunnelUpload = (file) => {
+    let privateKey = window.getGlobal('fs')
+      .readFileSync(file.path).toString()
+    this.props.form.setFieldsValue({
+      tunnelPrivateKey: privateKey
+    })
+    return false
+  }
+
   renderAuth () {
     const authType = this.props.form.getFieldValue('authType') ||
       authTypeMap.password
     return this[authType + 'Render']()
+  }
+
+  renderSshTunnelAuth() {
+    let authType = this.props.form.getFieldValue('tunnelAuthType')
+      || authTypeMap.password
+    return this['tunnel' + authType + 'Render']()
+  }
+
+
+  tunnelpasswordRender () {
+    const { getFieldDecorator } = this.props.form
+    const {
+      tunnelPassword
+    } = this.props.formData
+    return (
+      <FormItem
+        {...formItemLayout}
+        label={e('password')}
+        hasFeedback
+      >
+        {getFieldDecorator('tunnelPassword', {
+          rules: [{
+            max: 40, message: '40 chars max'
+          }],
+          initialValue: tunnelPassword
+        })(
+          <Input
+            type='password'
+            placeholder={e('password')}
+          />
+        )}
+      </FormItem>
+    )
+  }
+
+  tunnelprivateKeyRender () {
+    const { getFieldDecorator } = this.props.form
+    const {
+      tunnelPrivateKey,
+      tunnelPassphrase
+    } = this.props.formData
+    return [
+      <FormItem
+        {...formItemLayout}
+        label={e('privateKey')}
+        hasFeedback
+        key='tunnelPrivateKey'
+        className='mg1b'
+      >
+        {getFieldDecorator('tunnelPrivateKey', {
+          rules: [{
+            max: 13000, message: '13000 chars max'
+          }],
+          initialValue: tunnelPrivateKey
+        })(
+          <TextArea
+            placeholder={e('privateKeyDesc')}
+            rows={2}
+          />
+        )}
+        <Upload
+          beforeUpload={this.beforeTunnelUpload}
+          fileList={[]}
+          className='mg1b'
+        >
+          <Button
+            type='ghost'
+          >
+            {e('importFromFile')}
+          </Button>
+        </Upload>
+      </FormItem>,
+      <FormItem
+        key='tunnelPassphrase'
+        {...formItemLayout}
+        label={e('passphrase')}
+        hasFeedback
+      >
+        {getFieldDecorator('tunnelPassphrase', {
+          rules: [{
+            max: 100, message: '100 chars max'
+          }],
+          initialValue: tunnelPassphrase
+        })(
+          <Input
+            type='password'
+            placeholder={e('passphraseDesc')}
+          />
+        )}
+      </FormItem>
+    ]
   }
 
   passwordRender () {
@@ -697,6 +797,101 @@ export class BookmarkForm extends React.PureComponent {
     )
   }
 
+  renderSshTunnel () {
+    const { getFieldDecorator } = this.props.form
+    const {
+      tunnelHost,
+      tunnelPort = 22,
+      tunnelAuthType = authTypeMap.password,
+      tunnelUsername
+    } = this.props.formData
+    const {
+      autofocustrigger,
+    } = this.props
+
+    return (
+      <div>
+        <FormItem
+          {...formItemLayout}
+          label={e('host')}
+          hasFeedback
+        >
+          {getFieldDecorator('tunnelHost', {
+            rules: [{
+              max: 130, message: '130 chars max'
+            }, {
+              required: false, message: 'host required'
+            }],
+            normalize: this.trim,
+            initialValue: tunnelHost
+          })(
+            <InputAutoFocus
+              autofocustrigger={autofocustrigger}
+              selectall='true'
+              onBlur={this.onBlur}
+              onPaste={this.onPaste}
+            />
+          )}
+        </FormItem>
+        <FormItem
+          {...formItemLayout}
+          label={e('username')}
+          hasFeedback
+        >
+          {getFieldDecorator('tunnelUsername', {
+            rules: [{
+              max: 30, message: '30 chars max'
+            }, {
+              required: true, message: 'username required'
+            }],
+            initialValue: tunnelUsername,
+            normalize: this.trim
+          })(
+            <Input placeholder={defaultUserName} />
+          )}
+        </FormItem>
+        <FormItem {...tailFormItemLayout} className='mg1b'>
+          {getFieldDecorator('tunnelAuthType', {
+            initialValue: tunnelAuthType
+          })(
+            <RadioGroup size='small' buttonStyle='solid'>
+              {
+                authTypes.map(t => {
+                  return (
+                    <RadioButton value={t} key={t}>
+                      {e(t)}
+                    </RadioButton>
+                  )
+                })
+              }
+            </RadioGroup>
+          )}
+        </FormItem>
+        {this.renderSshTunnelAuth()}
+        <FormItem
+          {...formItemLayout}
+          label={e('port')}
+          hasFeedback
+        >
+          {getFieldDecorator('tunnelPort', {
+            rules: [{
+              required: true, message: 'port required'
+            }],
+            initialValue: tunnelPort
+          })(
+            <InputNumber
+              placeholder={e('port')}
+              min={1}
+              max={65535}
+              step={1}
+            />
+          )}
+        </FormItem>
+
+      </div>
+    )
+  }
+
   renderUI = () => {
     const { getFieldDecorator } = this.props.form
     const {
@@ -811,6 +1006,9 @@ export class BookmarkForm extends React.PureComponent {
       <Tabs type='card'>
         <TabPane tab={e('auth')} key='auth' forceRender>
           {this.renderCommon()}
+        </TabPane>
+        <TabPane tab={e('Tunnel')} key="tunnel" forceRender>
+          {this.renderSshTunnel()}
         </TabPane>
         <TabPane tab={s('settings')} key='settings' forceRender>
           {this.renderUI()}

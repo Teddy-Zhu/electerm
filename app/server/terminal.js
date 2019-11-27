@@ -14,6 +14,8 @@ const log = require('../utils/log')
 const alg = require('./ssh2-alg')
 // const MockBinding = require('@serialport/binding-mock')
 
+const getPort = require('get-port')
+
 // SerialPort.Binding = MockBinding
 // MockBinding.createPort('/dev/ROBOT', { echo: true, record: true })
 
@@ -127,137 +129,332 @@ class Terminal {
   async remoteInit (initOptions, isTest) {
     const display = await getDisplay()
     const x11Cookie = await getX11Cookie()
-    return new Promise((resolve, reject) => {
-      const conn = new Client()
-      const opts = Object.assign(
-        {
-          tryKeyboard: true
-        },
-        {
-          readyTimeout: _.get(initOptions, 'readyTimeout'),
-          keepaliveInterval: _.get(initOptions, 'keepaliveInterval'),
-          agent: process.env.SSH_AUTH_SOCK,
-          algorithms: alg
-        },
-        _.pick(initOptions, [
-          'host',
-          'port',
-          'username',
-          'password',
-          'privateKey',
-          'passphrase'
+    return new Promise(async (resolve, reject) => {
+
+      if (initOptions.tunnelHost) {
+        const tunnelConn = new Client()
+        const conn = new Client()
+        const opts = Object.assign(
+          {
+            tryKeyboard: true
+          },
+          {
+            readyTimeout: _.get(initOptions, 'readyTimeout'),
+            keepaliveInterval: _.get(initOptions, 'keepaliveInterval'),
+            agent: process.env.SSH_AUTH_SOCK,
+            algorithms: alg
+          },
+          _.pick(initOptions, [
+            'host',
+            'port',
+            'username',
+            'password',
+            'privateKey',
+            'passphrase',
+            'tunnelHost',
+            'tunnelPort',
+            'tunnelUsername',
+            'tunnelPassword',
+            'tunnelPrivateKey',
+            'tunnelPassphrase'
+          ])
+        )
+        if (!opts.password) {
+          delete opts.password
+        }
+        if (!opts.passphrase) {
+          delete opts.passphrase
+        }
+        let x11
+        if (initOptions.x11 === true) {
+          x11 = {
+            cookie: x11Cookie
+          }
+        }
+        const shellOpts = {
+          x11
+        }
+        const shellWindow = _.pick(initOptions, [
+          'rows', 'cols', 'term'
         ])
-      )
-      if (!opts.password) {
-        delete opts.password
-      }
-      if (!opts.passphrase) {
-        delete opts.passphrase
-      }
-      let x11
-      if (initOptions.x11 === true) {
-        x11 = {
-          cookie: x11Cookie
-        }
-      }
-      const shellOpts = {
-        x11
-      }
-      const shellWindow = _.pick(initOptions, [
-        'rows', 'cols', 'term'
-      ])
-      const run = (info) => {
-        if (info && info.socket) {
-          delete opts.host
-          delete opts.port
-          opts.sock = info.socket
-        }
-        conn
-          .on('keyboard-interactive', (
-            name,
-            instructions,
-            instructionsLang,
-            prompts,
-            finish
-          ) => {
-            finish([opts.password])
-          })
-          .on('x11', function (info, accept) {
-            let start = 0
-            const maxRetry = 100
-            const portStart = 6000
-            const maxPort = portStart + maxRetry
-            function retry () {
-              if (start >= maxPort) {
-                return
-              }
-              const xserversock = new net.Socket()
-              let xclientsock
-              xserversock
-                .on('connect', function () {
-                  xclientsock = accept()
-                  xclientsock.pipe(xserversock).pipe(xclientsock)
-                })
-                .on('error', (e) => {
-                  log.error(e)
-                  xserversock.destroy()
-                  start = start === maxRetry ? portStart : start + 1
-                  retry()
-                })
-                .on('close', () => {
-                  xserversock.destroy()
-                  xclientsock && xclientsock.destroy()
-                })
-              if (start < portStart) {
-                const addr = display.includes('/tmp')
-                  ? display
-                  : `/tmp/.X11-unix/X${start}`
-                xserversock.connect(addr)
-              } else {
-                xserversock.connect(start, 'localhost')
-              }
-            }
-            retry()
-          })
-          .on('ready', () => {
-            if (isTest) {
-              conn.end()
-              return resolve(true)
-            }
-            conn.shell(
-              shellWindow,
-              shellOpts,
-              (err, channel) => {
-                if (err) {
-                  return reject(err)
+        let cpParam = Object.assign(
+          {},
+          {
+            readyTimeout: _.get(initOptions, 'sshReadyTimeout'),
+            keepaliveInterval: _.get(initOptions, 'keepaliveInterval'),
+            agent: process.env.SSH_AUTH_SOCK
+          },
+          _.pick(initOptions, [
+            'tunnelHost',
+            'tunnelPort',
+            'tunnelUsername',
+            'tunnelPassword',
+            'tunnelPrivateKey',
+            'tunnelPassphrase'
+          ])
+        )
+        let localPort = await getPort()
+
+        cpParam.host = cpParam['tunnelHost']
+        cpParam.port = cpParam['tunnelPort']
+        cpParam.username = cpParam['tunnelUsername']
+        cpParam.password = cpParam['tunnelPassword']
+        cpParam.privateKey = cpParam['tunnelPrivateKey']
+        cpParam.passphrase = cpParam['tunnelPassphrase']
+        delete cpParam.tunnelHost
+        delete cpParam.tunnelPort
+        delete cpParam.tunnelUsername
+        delete cpParam.tunnelPassword
+        delete cpParam.tunnelPrivateKey
+        delete cpParam.tunnelPassphrase
+        const run = (info) => {
+          if (info && info.socket) {
+            delete cpParam.host
+            delete cpParam.port
+            cpParam.sock = info.socket
+          }
+
+          conn
+            .on('keyboard-interactive', (
+              name,
+              instructions,
+              instructionsLang,
+              prompts,
+              finish
+            ) => {
+              finish([opts.password])
+            })
+            .on('x11', function (info, accept) {
+              let start = 0
+              const maxRetry = 100
+              const portStart = 6000
+              const maxPort = portStart + maxRetry
+              function retry () {
+                if (start >= maxPort) {
+                  return
                 }
-                this.channel = channel
-                resolve(true)
+                const xserversock = new net.Socket()
+                let xclientsock
+                xserversock
+                  .on('connect', function () {
+                    xclientsock = accept()
+                    xclientsock.pipe(xserversock).pipe(xclientsock)
+                  })
+                  .on('error', (e) => {
+                    log.error(e)
+                    xserversock.destroy()
+                    start = start === maxRetry ? portStart : start + 1
+                    retry()
+                  })
+                  .on('close', () => {
+                    xserversock.destroy()
+                    xclientsock && xclientsock.destroy()
+                  })
+                if (start < portStart) {
+                  const addr = display.includes('/tmp')
+                    ? display
+                    : `/tmp/.X11-unix/X${start}`
+                  xserversock.connect(addr)
+                } else {
+                  xserversock.connect(start, 'localhost')
+                }
               }
-            )
+              retry()
+            })
+            .on('ready', () => {
+
+              let tunnelOpt = Object.assign({}, opts);
+              delete tunnelOpt.host
+              delete tunnelOpt.port
+
+
+              conn.forwardOut('127.0.0.1', localPort, opts.host, opts.port, (err, stream) => {
+                if (err) {
+                  reject(err)
+                  return
+                }
+                tunnelOpt.sock = stream
+                tunnelConn.on('ready', () => {
+
+                  if (isTest) {
+                    tunnelConn.end()
+                    conn.end()
+                    return resolve(true)
+                  }
+
+                  tunnelConn.shell(
+                    shellWindow,
+                    shellOpts,
+                    (err, channel) => {
+                      if (err) {
+                        return reject(err)
+                      }
+                      this.channel = channel
+                      resolve(true)
+                    }
+                  )
+
+                }).on('error', err => {
+                  reject(err)
+                }).connect(tunnelOpt)
+              })
+            })
+            .on('error', err => {
+              log.error('errored terminal', err)
+              conn.end()
+              reject(err)
+            })
+            .connect(cpParam)
+        }
+        if (
+          initOptions.proxy &&
+          initOptions.proxy.proxyIp &&
+          initOptions.proxy.proxyPort
+        ) {
+          proxySock({
+            ...initOptions,
+            ...cpParam
           })
-          .on('error', err => {
-            log.error('errored terminal', err)
-            conn.end()
-            reject(err)
-          })
-          .connect(opts)
-      }
-      if (
-        initOptions.proxy &&
-        initOptions.proxy.proxyIp &&
-        initOptions.proxy.proxyPort
-      ) {
-        proxySock({
-          ...initOptions,
-          ...opts
-        })
-          .then(run)
-          .catch(reject)
+            .then(run)
+            .catch(reject)
+        } else {
+          run()
+        }
+        this.tunnelConn = tunnelConn
+        this.conn = conn
       } else {
-        run()
+        const conn = new Client()
+        const opts = Object.assign(
+          {
+            tryKeyboard: true
+          },
+          {
+            readyTimeout: _.get(initOptions, 'readyTimeout'),
+            keepaliveInterval: _.get(initOptions, 'keepaliveInterval'),
+            agent: process.env.SSH_AUTH_SOCK,
+            algorithms: alg
+          },
+          _.pick(initOptions, [
+            'host',
+            'port',
+            'username',
+            'password',
+            'privateKey',
+            'passphrase'
+          ])
+        )
+        if (!opts.password) {
+          delete opts.password
+        }
+        if (!opts.passphrase) {
+          delete opts.passphrase
+        }
+        let x11
+        if (initOptions.x11 === true) {
+          x11 = {
+            cookie: x11Cookie
+          }
+        }
+        const shellOpts = {
+          x11
+        }
+        const shellWindow = _.pick(initOptions, [
+          'rows', 'cols', 'term'
+        ])
+        const run = (info) => {
+          if (info && info.socket) {
+            delete opts.host
+            delete opts.port
+            opts.sock = info.socket
+          }
+          conn
+            .on('keyboard-interactive', (
+              name,
+              instructions,
+              instructionsLang,
+              prompts,
+              finish
+            ) => {
+              finish([opts.password])
+            })
+            .on('x11', function (info, accept) {
+              let start = 0
+              const maxRetry = 100
+              const portStart = 6000
+              const maxPort = portStart + maxRetry
+              function retry () {
+                if (start >= maxPort) {
+                  return
+                }
+                const xserversock = new net.Socket()
+                let xclientsock
+                xserversock
+                  .on('connect', function () {
+                    xclientsock = accept()
+                    xclientsock.pipe(xserversock).pipe(xclientsock)
+                  })
+                  .on('error', (e) => {
+                    log.error(e)
+                    xserversock.destroy()
+                    start = start === maxRetry ? portStart : start + 1
+                    retry()
+                  })
+                  .on('close', () => {
+                    xserversock.destroy()
+                    xclientsock && xclientsock.destroy()
+                  })
+                if (start < portStart) {
+                  const addr = display.includes('/tmp')
+                    ? display
+                    : `/tmp/.X11-unix/X${start}`
+                  xserversock.connect(addr)
+                } else {
+                  xserversock.connect(start, 'localhost')
+                }
+              }
+              retry()
+            })
+            .on('ready', () => {
+              if (isTest) {
+                conn.end()
+                return resolve(true)
+              }
+              conn.shell(
+                shellWindow,
+                shellOpts,
+                (err, channel) => {
+                  if (err) {
+                    return reject(err)
+                  }
+                  this.channel = channel
+                  resolve(true)
+                }
+              )
+            })
+            .on('error', err => {
+              log.error('errored terminal', err)
+              conn.end()
+              reject(err)
+            })
+            .connect(opts)
+        }
+        if (
+          initOptions.proxy &&
+          initOptions.proxy.proxyIp &&
+          initOptions.proxy.proxyPort
+        ) {
+          proxySock({
+            ...initOptions,
+            ...opts
+          })
+            .then(run)
+            .catch(reject)
+        } else {
+          run()
+        }
+        this.conn = conn
       }
-      this.conn = conn
+
     })
   }
 
@@ -315,6 +512,7 @@ class Terminal {
   }
 
   remoteKill () {
+    this.tunnelConn && this.tunnelConn.end()
     this.conn && this.conn.end()
   }
 }

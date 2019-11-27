@@ -51,6 +51,7 @@ export const statusMap = buildConst([
 
 export const connectionMap = buildConst([
   'ssh',
+  'tunnel',
   'serial'
 ])
 

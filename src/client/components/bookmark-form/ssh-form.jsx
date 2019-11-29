@@ -841,7 +841,7 @@ export class BookmarkForm extends React.PureComponent {
             rules: [{
               max: 30, message: '30 chars max'
             }, {
-              required: true, message: 'username required'
+              required: false, message: 'username required'
             }],
             initialValue: tunnelUsername,
             normalize: this.trim

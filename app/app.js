@@ -27,7 +27,7 @@ const ls = require('./lib/ls')
 const menu = require('./lib/menu')
 const log = require('./utils/log')
 const { testConnection } = require('./server/terminal')
-const { saveLangConfig, lang, langs } = require('./lib/locales')
+const { saveLangConfig, lang, langs, sysLocale } = require('./lib/locales')
 const rp = require('phin').promisified
 const lastStateManager = require('./lib/last-state')
 const installSrc = require('./lib/install-src')
@@ -60,7 +60,7 @@ function onClose () {
     clearTimeout(timer)
     clearTimeout(timer1)
     global.win = null
-    process.kill(childPid)
+    childPid && process.kill(childPid)
     process.on('uncaughtException', function () {
       process.exit(0)
     })
@@ -86,11 +86,12 @@ log.debug('App starting...')
 
 async function createWindow () {
   const config = await getConf()
-
   // start server
   const child = fork(resolve(__dirname, './server/server.js'), {
     env: Object.assign(
-      {},
+      {
+        LANG: `${sysLocale.replace(/-/, '_')}.UTF-8`
+      },
       process.env,
       _.pick(config, ['port', 'host'])
     ),
@@ -100,6 +101,10 @@ async function createWindow () {
       throw error || stderr
     }
     log.info(stdout)
+  })
+
+  child.on('exit', () => {
+    childPid = null
   })
 
   childPid = child.pid

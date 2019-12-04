@@ -41,14 +41,13 @@ module.exports = function () {
         disableTransferHistory: false,
         terminalBackgroundImagePath: '',
         rendererType: 'canvas',
-        terminalType: 'xterm-color'
+        terminalType: 'xterm-256color'
       }
       const conf = {
-        port: freePort,
-        host: 'localhost',
         keepaliveInterval: 20 * 1000,
         rightClickSelectsWord: false,
         pasteWhenContextMenu: false,
+        ctrlOrMetaOpenTerminalLink: false,
         showMenu: true,
         ...defaultSettings,
         defaultSettings,
@@ -64,16 +63,18 @@ module.exports = function () {
           autoSync: false
         },
         terminalTypes: [
+          'xterm-256color',
           'xterm-color',
           'vt100',
           'xterm-vt220',
           'xterm',
-          'ansi',
-          'xterm-256color'
+          'ansi'
         ]
       }
       extend(conf, override)
       extend(conf, userConfig)
+      conf.host = 'localhost'
+      conf.port = freePort
       resolve(conf)
     })
   })
